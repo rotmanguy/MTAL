@@ -1,0 +1,30 @@
+{
+  "dataset_reader": {
+    "type": "universal-dependencies-reader",
+    "lazy": false,
+    "token_indexers": {
+      "tokens": {
+        "type": "single_id",
+        "lowercase_tokens": true
+      },
+      "bert": {
+        "type": "bert-pretrained-indexer",
+        "pretrained_model": "config/archive/bert-base-multilingual-cased/vocab.txt",
+        "do_lowercase": false,
+        "use_starting_offsets": true
+      }
+    }
+  },
+  "udify_replace": [
+    "dataset_reader.token_indexers",
+    "model.text_field_embedder",
+    "model.encoder",
+    "model.decoders.xpos",
+    "model.decoders.deps.encoder",
+    "model.decoders.upos.encoder",
+    "model.decoders.feats.encoder",
+    "model.decoders.lemmas.encoder",
+    "trainer.learning_rate_scheduler",
+    "trainer.optimizer"
+  ]
+}
