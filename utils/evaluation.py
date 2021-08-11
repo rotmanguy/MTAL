@@ -82,7 +82,8 @@ def convert_dict_prediction_to_str(args: Namespace, outputs: Dict) -> str:
     output_lines = []
     for i, line in enumerate(lines):
         line_ = [str(l) for l in line[:-1]]
-
+        if not line_[0].isdigit():
+            ssa=1
         # Handle multiword tokens
         if multiword_map and i + 1 in multiword_map:
             id_, form = multiword_map[i + 1]
@@ -228,23 +229,24 @@ def predict_and_evaluate(args, model, dataloader, data_split, global_step, domai
                 #     gold_file_above_10.writelines([labels[len_idx] for len_idx, length in enumerate(lengths) if length > 10])
 
             ## gathering gold and predicted labels for the additional tasks
-            for k in args.tasks:
-                if k == 'deps':
+            for task in args.tasks:
+                if task in ["deps", "UFeats", "AllTags", "Lemmas", "CLAS", "MLAS", "BLEX"]:
                     continue
-                if k not in extra_labels_gold:
-                    extra_labels_gold[k] = []
-                if k not in extra_labels_predict:
-                    extra_labels_predict[k] = []
-                if k not in extra_evaluation:
-                    extra_evaluation[k] = {'loss': 0.0}
+                task_upper = task.upper()
+                if task_upper not in extra_labels_gold:
+                    extra_labels_gold[task_upper] = []
+                if task_upper not in extra_labels_predict:
+                    extra_labels_predict[task_upper] = []
+                if task_upper not in extra_evaluation:
+                    extra_evaluation[task_upper] = {'loss': 0.0}
 
                 sent_lengths = [len(x) for x in outputs['words']]
-                extra_labels_gold[k] += [x[:sent_lengths[i]] for i, x in enumerate(outputs[k + '_tags'])]
-                extra_labels_predict[k] += [x[:sent_lengths[i]] for i, x in enumerate(outputs['predicted_' + k])]
-                extra_evaluation[k]['loss'] += outputs["loss_dict"][k]
+                extra_labels_gold[task_upper] += [x[:sent_lengths[i]] for i, x in enumerate(outputs[task + '_tags'])]
+                extra_labels_predict[task_upper] += [x[:sent_lengths[i]] for i, x in enumerate(outputs['predicted_' + task])]
+                extra_evaluation[task_upper]['loss'] += outputs["loss_dict"][task]
                 # if final_eval:
-                #     extra_evaluation_below_10[k] = {'loss': extra_evaluation[k]['loss']}
-                #     extra_evaluation_above_10[k] = {'loss': extra_evaluation[k]['loss']}
+                #     extra_evaluation_below_10[task] = {'loss': extra_evaluation[task]['loss']}
+                #     extra_evaluation_above_10[task] = {'loss': extra_evaluation[task]['loss']}
 
     tmp_pred_file.close()
     # if final_eval:
@@ -256,13 +258,14 @@ def predict_and_evaluate(args, model, dataloader, data_split, global_step, domai
         #     gold_file_below_10.close()
         #     gold_file_above_10.close()
 
-    for k in extra_labels_gold.keys():
-        extra_evaluation[k]['aligned_accuracy'] = accuracy_score(extra_labels_gold[k], extra_labels_predict[k])
-        extra_evaluation[k]['precision'] = precision_score(extra_labels_gold[k], extra_labels_predict[k])
-        extra_evaluation[k]['recall'] = recall_score(extra_labels_gold[k], extra_labels_predict[k])
-        extra_evaluation[k]['f1'] = f1_score(extra_labels_gold[k], extra_labels_predict[k])
-        cls_report = classification_report(extra_labels_gold[k], extra_labels_predict[k], digits=2)
-        with open(os.path.join(domain_results_dir, domain + '_' + k + '_res_' + data_split + '.conllu'), "w") as text_file:
+    for task in extra_labels_gold.keys():
+        task_upper = task.upper()
+        extra_evaluation[task_upper]['aligned_accuracy'] = accuracy_score(extra_labels_gold[task_upper], extra_labels_predict[task_upper])
+        extra_evaluation[task_upper]['precision'] = precision_score(extra_labels_gold[task_upper], extra_labels_predict[task_upper])
+        extra_evaluation[task_upper]['recall'] = recall_score(extra_labels_gold[task_upper], extra_labels_predict[task_upper])
+        extra_evaluation[task_upper]['f1'] = f1_score(extra_labels_gold[task_upper], extra_labels_predict[task_upper])
+        cls_report = classification_report(extra_labels_gold[task_upper], extra_labels_predict[task_upper], digits=2)
+        with open(os.path.join(domain_results_dir, domain + '_' + task + '_res_' + data_split + '.conllu'), "w") as text_file:
             text_file.write(cls_report)
 
         # if final_eval:
@@ -324,7 +327,7 @@ def main_evaluation(args, dataloaders, model, optimizer, scheduler, amp, dev_eva
             if task == 'deps':
                 metric_name = 'LAS'
             else:
-                metric_name = task
+                metric_name = task.upper()
             metric = dev_eval_dict[metric_name]['f1'] if dev_eval_dict[metric_name]['f1'] != 0.0 else 1e-8
             cur_metric = curr_dev_eval_dict[metric_name]['f1'] if curr_dev_eval_dict[metric_name]['f1'] != 0.0 else 1e-8
             dev_eval_metrics.append(metric)

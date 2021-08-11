@@ -123,7 +123,6 @@ else:
     pretrained_model = "bert-base-cased"
 
 tasks_list = [("deps",), ("ner", ), ("deps", "ner")]
-tasks_list = [("deps", "ner")]
 
 task_levels_dict = {
     ("deps",): [-1],

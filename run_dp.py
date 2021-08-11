@@ -125,6 +125,8 @@ def main():
     parser.add_argument("--task_weights", default=None, type=float, nargs="+", help="the weights of the tasks")
     parser.add_argument("--training_set_percentage", default=None, type=float,
                         help="The starting training percentage. A float between 0 to 1.")
+    parser.add_argument("--load_sample_ids_dir", default=None, type=str,
+                        help="loading sample ids files from directory. Only valid if al_scoring is from_file.")
     parser.add_argument("--training_set_size", default=None, type=int,  help="Specify the training set size you wish")
     parser.add_argument("--pretrained_training_set_size", default=None, type=int,  help="Specify the pretrained training set size you wish")
     parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.")

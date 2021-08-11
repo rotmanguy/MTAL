@@ -493,7 +493,7 @@ def write_results_file(evaluation, output_file):
         f.write("Metric     | Precision |    Recall |  F1 Score | AligndAcc\n")
         f.write("-----------+-----------+-----------+-----------+-----------")
         for metric in ["Num_Tokens", "Num_Sentences", "Tokens", "Sentences", "Words", "UFeats", "AllTags", "Lemmas", "CLAS", "MLAS",
-                       "BLEX", "XPOS", "UPOS", "UAS", "LAS", "ner"]:
+                       "BLEX", "XPOS", "UPOS", "UAS", "LAS", "NER"]:
             if metric in evaluation:
                 if metric not in ["Num_Tokens", "Num_Sentences"]:
                     f.write('\n')
@@ -520,7 +520,7 @@ def print_results(evaluation):
     logger.info("Metric     | Precision |    Recall |  F1 Score | AligndAcc  | Loss\n")
     logger.info("-----------+-----------+-----------+-----------+-----------")
     for metric in ["Num_Tokens", "Num_Sentences", "Tokens", "Sentences", "Words", "UFeats", "AllTags", "Lemmas", "CLAS","MLAS",
-                   "BLEX", "XPOS", "UPOS", "UAS", "LAS", "ner"]:
+                   "BLEX", "XPOS", "UPOS", "UAS", "LAS", "NER"]:
         if metric in evaluation and metric:
             if metric not in ["Num_Tokens", "Num_Sentences"]:
                 logger.info("{:11} |{:10.2f} |{:10.2f} |{:10.2f} |{} | {}".format(
@@ -530,7 +530,7 @@ def print_results(evaluation):
                         100 * evaluation[metric]['f1'],
                         "{:10.2f}".format(100 * evaluation[metric]['aligned_accuracy']) if evaluation[
                                                                                             metric]['aligned_accuracy'] is not None else "",
-                        evaluation[metric]['loss'] if 'loss' in evaluation[metric] else ""
+                        "{:10.2f}".format(evaluation[metric]['loss']) if 'loss' in evaluation[metric] else ""
                     ))
             else:
                 logger.info("{:11} |{:10.2f} |{:10.2f} |{:10.2f} |{} | {}".format(

@@ -10,6 +10,7 @@ def call_func(src_domain,
               do_mode='train',
               pretrained_model='bert-base-cased',
               vocab_path=None,
+              load_sample_ids_dir=None,
               bert_vocab_path=None,
               training_set_percentage=None,
               training_set_size=None,
@@ -17,8 +18,8 @@ def call_func(src_domain,
               unlabeled_input_dir=None,
               train_unlabeled_data=False,
               train_labeled_and_unlabeled_data=False,
-              scale_temperature=None,
               al_scoring=None,
+              al_scoring_to_load=None,
               task_for_scoring=None,
               num_al_iterations=5,
               label_smoothing=None):
@@ -72,8 +73,8 @@ def call_func(src_domain,
     if train_labeled_and_unlabeled_data:
         shell_str += ['--train_labeled_and_unlabeled_data']
 
-    if scale_temperature is not None:
-        shell_str += ['--scale_temperature']
+    if load_sample_ids_dir is not None:
+        shell_str += ['--load_sample_ids_dir', load_sample_ids_dir]
 
     if do_mode == 'eval':
         shell_str += ['--do_eval']
@@ -88,14 +89,12 @@ def call_func(src_domain,
     model_name += '_' + '_'.join(tasks)
 
     model_name += '_al_scoring_' + al_scoring
+    model_name += '_' + al_scoring_to_load
     if task_for_scoring is not None:
         model_name += '_by_' + task_for_scoring
 
     if label_smoothing is not None:
         model_name += '_ls_' + str(label_smoothing)
-
-    if scale_temperature is not None:
-        model_name += '_scale_tmp'
 
     model_name += '_' + pretrained_model
 
@@ -129,6 +128,7 @@ def call_func(src_domain,
 calls_list = []
 unfreeze_list = [True]
 dataset = "ontonotes"
+
 if dataset == 'ud':
     domains = ['danish', 'english', 'italian', 'hebrew', 'indonesian', 'russian', 'turkish', 'vietnamese']
     vocab_path = "data/ud/vocab/multilingual/vocabulary"
@@ -143,64 +143,67 @@ else:
     bert_vocab_path = "config/archive/bert-large-cased/vocab.txt"
     pretrained_model = "bert-base-cased"
 
-tasks_list = [("deps", "ner"), ("deps",), ("ner", )]
-#tasks_list = [("deps", "ner", "upos")]
+#tasks_list = [("deps", "ner"), ("deps",), ("ner", )]
+tasks_list = [("deps", ), ("ner", )]
 
 
 task_levels_dict = {
     ("deps",): [-1],
-    ("ner", ): [-1],
-    ("upos",): [-1],
-    ("deps", "ner"): [-1, -1],
-    ("deps", "ner", "upos"): [-1, -1, -1]
+    ("ner", ): [-1]
 }
 
 do_mode = 'train_and_eval'
+al_scoring = 'from_file'
 load_model_path = None
 
 training_set_percentage_list = [0.02]
 num_al_iterations = 5
-scale_temperature_list = [True]
 # label_smoothing = 0.2
 # label_smoothing = None
-# label_smoothing_list = [0.2]
-label_smoothing_list = [None]
-
+label_smoothing_list = [0.2, None]
 num_calls = 0
 for label_smoothing in label_smoothing_list:
     for training_set_percentage in training_set_percentage_list:
-        for scale_temperature in scale_temperature_list:
-            for domain in domains:
-                for tasks in tasks_list:
-                    task_levels = task_levels_dict[tasks]
-                    if len(tasks) > 1:
-                        al_scoring_list = ['joint_entropy', 'joint_max_entropy', 'joint_min_entropy',
-                                            'entropy', 'random', 'dropout_agreement', 'dropout_joint_agreement',
-                                          'joint_max_entropy', 'joint_min_entropy']
-                        al_scoring_list = ['joint_entropy']
+        for domain in domains:
+            for tasks in tasks_list:
+                task_levels = task_levels_dict[tasks]
+                for unfreeze_mode in unfreeze_list:
+                    if (al_scoring == 'entropy' or al_scoring == 'dropout_agreement') and len(tasks) > 1:
+                        task_for_scoring_list = tasks
                     else:
-                        al_scoring_list = ['entropy', 'random', 'dropout_agreement']
-                        al_scoring_list = ['entropy']
-                    for unfreeze_mode in unfreeze_list:
-                        for al_scoring in al_scoring_list:
-                            if (al_scoring == 'entropy' or al_scoring == 'dropout_agreement') and len(tasks) > 1:
-                                task_for_scoring_list = tasks
+                        task_for_scoring_list = (None, )
+
+
+                    al_scoring_to_load_list = ['entropy', 'dropout_agreement']
+                    for al_scoring_to_load in al_scoring_to_load_list:
+                        load_sample_ids_dir = 'saved_models/' + dataset + '_' + domain + '_active_learning_train_percentage_'\
+                                              + str(training_set_percentage) + '_' + '_'.join(tasks) + '_al_scoring_' + al_scoring_to_load
+                        if label_smoothing is not None:
+                            load_sample_ids_dir += '_ls_'+str(label_smoothing)
+                        load_sample_ids_dir += '_' + pretrained_model
+                        if unfreeze_mode:
+                            load_sample_ids_dir += '_unfreeze'
+                        else:
+                            load_sample_ids_dir += '_freeze'
+
+                        for task_for_scoring in task_for_scoring_list:
+                            if tasks == ("deps",):
+                                tasks_for_training = ("ner",)
                             else:
-                                task_for_scoring_list = (None, )
-                            for task_for_scoring in task_for_scoring_list:
-                                command = call_func(dataset=dataset, vocab_path=vocab_path, bert_vocab_path=bert_vocab_path,
-                                                    src_domain=domain, tasks=tasks, task_levels=task_levels, unfreeze_mode=unfreeze_mode,
-                                                    do_mode=do_mode, pretrained_model=pretrained_model, training_set_percentage=training_set_percentage,
-                                                    al_scoring=al_scoring, task_for_scoring=task_for_scoring, num_al_iterations=num_al_iterations,
-                                                    label_smoothing=label_smoothing, scale_temperature=scale_temperature)
-                                if command is not None:
-                                    num_calls += 1
-                                    # if num_calls % 2 == 0:
-                                    #    continue
-                                    # else:
-                                    p = subprocess.Popen(command, shell=True)
-                                    p.communicate()
-                                    print()
+                                tasks_for_training = ("deps",)
+                            command = call_func(dataset=dataset, vocab_path=vocab_path, bert_vocab_path=bert_vocab_path,
+                                                src_domain=domain, tasks=tasks_for_training, load_sample_ids_dir=load_sample_ids_dir, task_levels=task_levels, unfreeze_mode=unfreeze_mode,
+                                                do_mode=do_mode, pretrained_model=pretrained_model, training_set_percentage=training_set_percentage,
+                                                al_scoring=al_scoring, al_scoring_to_load=al_scoring_to_load, task_for_scoring=task_for_scoring, num_al_iterations=num_al_iterations,
+                                                label_smoothing=label_smoothing)
+                            if command is not None:
+                                num_calls += 1
+                                # if num_calls % 2 == 1:
+                                #    continue
+                                # else:
+                                # p = subprocess.Popen(command, shell=True)
+                                # p.communicate()
+                                print()
 
 print(num_calls)
 

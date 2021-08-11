@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 
 def entropy(x):

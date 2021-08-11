@@ -12,7 +12,8 @@ from active_learning_utils.ece_calculation import set_temperature
 from io_.io_utils import clean_batch
 from utils.active_learning import active_learning_entropy, active_learning_joint_entropy, active_learning_random, \
     active_learning_dropout_entropy, active_learning_dropout_joint_entropy, active_learning_dropout_agreement, \
-    active_learning_dropout_joint_agreement, active_learning_joint_max_entropy, active_learning_joint_min_entropy
+    active_learning_dropout_joint_agreement, active_learning_joint_max_entropy, active_learning_joint_min_entropy, \
+    active_learning_load_from_file
 from utils.conll18_ud_eval import write_results_file
 from utils.evaluation import main_evaluation, predict_and_evaluate
 from utils.utils import set_seed, build_model, save_checkpoint
@@ -119,10 +120,11 @@ def train(args, dataloaders, vocab, al_iter_num=0):
         else:
             logger.info('We did not find a saved model. Evaluating with current model')
 
-    # logger.info('--- Optimizing Scaled Temperature ---')
-    # model = set_temperature(args, vocab, model, dataloaders['dev'])
-    # model_path = os.path.join(args.output_dir, args.src_domain + '.tar.gz')
-    # save_checkpoint(model, optimizer, amp, scheduler, dev_eval_dict, model_path)
+    if args.scale_temperature:
+        logger.info('--- Optimizing Scaled Temperature ---')
+        model = set_temperature(args, vocab, model, dataloaders['dev'])
+        model_path = os.path.join(args.output_dir, args.src_domain + '_scaled_tmp.tar.gz')
+        save_checkpoint(model, optimizer, amp, scheduler, dev_eval_dict, model_path)
 
     logger.info('--- Performing final evaluation ---')
     for split in dataloaders.keys():
@@ -164,8 +166,8 @@ def train(args, dataloaders, vocab, al_iter_num=0):
                 res_filename = os.path.join(domain_results_dir, 'eval_' + split + '.csv')
                 write_results_file(eval_dict, res_filename)
 
-    if args.do_eval:
-        return None
+    # if args.do_eval:
+    #     return None
     sample_ids = []
     if 'unlabeled' in dataloaders:
         if args.al_scoring == 'joint_entropy':
@@ -184,6 +186,8 @@ def train(args, dataloaders, vocab, al_iter_num=0):
             sample_ids = active_learning_dropout_entropy(args, model, dataloaders['unlabeled'], args.task_for_scoring, al_iter_num)
         elif args.al_scoring == 'dropout_agreement':
             sample_ids = active_learning_dropout_agreement(args, model, dataloaders['unlabeled'], args.task_for_scoring, al_iter_num)
+        elif args.al_scoring == 'from_file':
+            sample_ids = active_learning_load_from_file(args, al_iter_num)
         else: ## random
             sample_ids = active_learning_random(args, model, dataloaders['unlabeled'], al_iter_num)
     return sample_ids

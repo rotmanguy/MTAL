@@ -64,11 +64,11 @@ def active_learning_joint_entropy(args, model, dataloader, al_iter_num):
     logger.info("------------- average_length -------")
     logger.info(average_length)
     compute_statistics(args, 'unlabeled', al_scores, accuracy_scores, al_iter_num)
-    samples_ids = [k for k, v in sorted(al_scores.items(), key=lambda item: item[1])][:args.training_samples_to_add]
+    sample_ids = [k for k, v in sorted(al_scores.items(), key=lambda item: item[1])][:args.training_samples_to_add]
     sample_ids_file = os.path.join(args.output_dir, args.src_domain + '_sample_ids_joint_entropy_'+ '_'.join(args.tasks) + '_iter_' + str(al_iter_num) + '.csv')
     with open(sample_ids_file, 'w', newline='') as myfile:
-        myfile.write("\n".join([str(id) for id in samples_ids]))
-    return samples_ids
+        myfile.write("\n".join([str(id) for id in sample_ids]))
+    return sample_ids
 
 def active_learning_joint_max_entropy(args, model, dataloader, al_iter_num):
     logger.info("***** Scoring Unlabeled Samples *****")
@@ -118,11 +118,11 @@ def active_learning_joint_max_entropy(args, model, dataloader, al_iter_num):
     logger.info("------------- average_length -------")
     logger.info(average_length)
     compute_statistics(args, 'unlabeled', al_scores, accuracy_scores, al_iter_num)
-    samples_ids = [k for k, v in sorted(al_scores.items(), key=lambda item: item[1])][:args.training_samples_to_add]
+    sample_ids = [k for k, v in sorted(al_scores.items(), key=lambda item: item[1])][:args.training_samples_to_add]
     sample_ids_file = os.path.join(args.output_dir, args.src_domain + '_sample_ids_joint_max_entropy_' + '_'.join(args.tasks) + '_iter_' + str(al_iter_num) + '.csv')
     with open(sample_ids_file, 'w', newline='') as myfile:
-        myfile.write("\n".join([str(id) for id in samples_ids]))
-    return samples_ids
+        myfile.write("\n".join([str(id) for id in sample_ids]))
+    return sample_ids
 
 def active_learning_joint_min_entropy(args, model, dataloader, al_iter_num):
     logger.info("***** Scoring Unlabeled Samples *****")
@@ -172,11 +172,11 @@ def active_learning_joint_min_entropy(args, model, dataloader, al_iter_num):
     logger.info("------------- average_length -------")
     logger.info(average_length)
     compute_statistics(args, 'unlabeled', al_scores, accuracy_scores, al_iter_num)
-    samples_ids = [k for k, v in sorted(al_scores.items(), key=lambda item: item[1])][:args.training_samples_to_add]
+    sample_ids = [k for k, v in sorted(al_scores.items(), key=lambda item: item[1])][:args.training_samples_to_add]
     sample_ids_file = os.path.join(args.output_dir, args.src_domain + '_sample_ids_joint_min_entropy_' + '_'.join(args.tasks) + '_iter_' + str(al_iter_num) + '.csv')
     with open(sample_ids_file, 'w', newline='') as myfile:
-        myfile.write("\n".join([str(id) for id in samples_ids]))
-    return samples_ids
+        myfile.write("\n".join([str(id) for id in sample_ids]))
+    return sample_ids
 
 def active_learning_dropout_joint_entropy(args, model, dataloader, al_iter_num):
     def enable_dropout(model):
@@ -246,12 +246,12 @@ def active_learning_dropout_joint_entropy(args, model, dataloader, al_iter_num):
     logger.info("------------- average_length -------")
     logger.info(average_length)
     compute_statistics(args, 'unlabeled', al_scores, accuracy_scores, al_iter_num)
-    samples_ids = [k for k, v in sorted(al_scores.items(), key=lambda item: item[1])][:args.training_samples_to_add]
+    sample_ids = [k for k, v in sorted(al_scores.items(), key=lambda item: item[1])][:args.training_samples_to_add]
     sample_ids_file = os.path.join(args.output_dir, args.src_domain + '_sample_ids_dropout_joint_entropy_' + '_'.join(args.tasks) + '_iter_' + str(al_iter_num) + '.csv')
     with open(sample_ids_file, 'w', newline='') as myfile:
-        myfile.write("\n".join([str(id) for id in samples_ids]))
+        myfile.write("\n".join([str(id) for id in sample_ids]))
     model.eval()
-    return samples_ids
+    return sample_ids
 
 def active_learning_entropy(args, model, dataloader, task, al_iter_num):
     logger.info("***** Scoring Unlabeled Samples *****")
@@ -291,11 +291,11 @@ def active_learning_entropy(args, model, dataloader, task, al_iter_num):
     logger.info("------------- average_length -------")
     logger.info(average_length)
     compute_statistics(args, 'unlabeled', al_scores, accuracy_scores, al_iter_num)
-    samples_ids = [k for k, v in sorted(al_scores.items(), key=lambda item: item[1])][:args.training_samples_to_add]
+    sample_ids = [k for k, v in sorted(al_scores.items(), key=lambda item: item[1])][:args.training_samples_to_add]
     sample_ids_file = os.path.join(args.output_dir, args.src_domain + '_sample_ids_entropy_' + task + '_iter_' + str(al_iter_num) + '.csv')
     with open(sample_ids_file, 'w', newline='') as myfile:
-        myfile.write("\n".join([str(id) for id in samples_ids]))
-    return samples_ids
+        myfile.write("\n".join([str(id) for id in sample_ids]))
+    return sample_ids
 
 def active_learning_dropout_agreement(args, model, dataloader, task, al_iter_num):
     def enable_dropout(model):
@@ -376,11 +376,11 @@ def active_learning_dropout_agreement(args, model, dataloader, task, al_iter_num
     logger.info("------------- average_length -------")
     logger.info(average_length)
     compute_statistics(args, 'unlabeled', al_scores, accuracy_scores, al_iter_num)
-    samples_ids = [k for k, v in sorted(al_scores.items(), key=lambda item: item[1])][:args.training_samples_to_add]
+    sample_ids = [k for k, v in sorted(al_scores.items(), key=lambda item: item[1])][:args.training_samples_to_add]
     sample_ids_file = os.path.join(args.output_dir, args.src_domain + '_sample_ids_entropy_' + task + '_iter_' + str(al_iter_num) + '.csv')
     with open(sample_ids_file, 'w', newline='') as myfile:
-        myfile.write("\n".join([str(id) for id in samples_ids]))
-    return samples_ids
+        myfile.write("\n".join([str(id) for id in sample_ids]))
+    return sample_ids
 
 def active_learning_dropout_joint_agreement(args, model, dataloader, al_iter_num):
     def enable_dropout(model):
@@ -462,11 +462,11 @@ def active_learning_dropout_joint_agreement(args, model, dataloader, al_iter_num
     logger.info("------------- average_length -------")
     logger.info(average_length)
     compute_statistics(args, 'unlabeled', al_scores, accuracy_scores, al_iter_num)
-    samples_ids = [k for k, v in sorted(al_scores.items(), key=lambda item: item[1])][:args.training_samples_to_add]
+    sample_ids = [k for k, v in sorted(al_scores.items(), key=lambda item: item[1])][:args.training_samples_to_add]
     sample_ids_file = os.path.join(args.output_dir, args.src_domain + '_sample_ids_entropy_' + '_'.join(args.tasks) + '_iter_' + str(al_iter_num) + '.csv')
     with open(sample_ids_file, 'w', newline='') as myfile:
-        myfile.write("\n".join([str(id) for id in samples_ids]))
-    return samples_ids
+        myfile.write("\n".join([str(id) for id in sample_ids]))
+    return sample_ids
 
 def active_learning_dropout_entropy(args, model, dataloader, task, al_iter_num):
     def enable_dropout(model):
@@ -527,12 +527,28 @@ def active_learning_dropout_entropy(args, model, dataloader, task, al_iter_num):
     logger.info("------------- average_length -------")
     logger.info(average_length)
     compute_statistics(args, 'unlabeled', al_scores, accuracy_scores, al_iter_num)
-    samples_ids = [k for k, v in sorted(al_scores.items(), key=lambda item: item[1])][:args.training_samples_to_add]
+    sample_ids = [k for k, v in sorted(al_scores.items(), key=lambda item: item[1])][:args.training_samples_to_add]
     sample_ids_file = os.path.join(args.output_dir, args.src_domain + '_sample_ids_dropout_entropy_' + task + '_iter_' + str(al_iter_num) + '.csv')
     with open(sample_ids_file, 'w', newline='') as myfile:
-        myfile.write("\n".join([str(id) for id in samples_ids]))
-    model.eval()
-    return samples_ids
+        myfile.write("\n".join([str(id) for id in sample_ids]))
+    return sample_ids
+
+def active_learning_load_from_file(args, al_iter_num):
+    sample_ids_file = [os.path.join(args.load_sample_ids_dir, f) for f in os.listdir(args.load_sample_ids_dir) if
+                        args.src_domain + '_sample_ids' in f and 'iter_' + str(al_iter_num) in f][0]
+    sample_ids = []
+    i = 0
+    with open(sample_ids_file, 'r') as f:
+        for line in f.readlines():
+            sample_id = int(line.strip())
+            sample_ids.append(sample_id)
+            i += 1
+            if i >= args.training_samples_to_add:
+                break
+    sample_ids_file = os.path.join(args.output_dir, args.src_domain + '_sample_ids_from_file_iter_' + str(al_iter_num) + '.csv')
+    with open(sample_ids_file, 'w', newline='') as myfile:
+        myfile.write("\n".join([str(id) for id in sample_ids]))
+    return sample_ids
 
 def active_learning_random(args, model, dataloader, al_iter_num):
     logger.info("***** Scoring Unlabeled Samples *****")
@@ -544,11 +560,11 @@ def active_learning_random(args, model, dataloader, al_iter_num):
         with torch.no_grad():
             all_samples += [x['sample_id'] for x in batch['metadata']]
     np.random.shuffle(all_samples)
-    samples_ids = all_samples[:args.training_samples_to_add]
+    sample_ids = all_samples[:args.training_samples_to_add]
     sample_ids_file = os.path.join(args.output_dir, args.src_domain + '_sample_ids_random_iter_' + str(al_iter_num) + '.csv')
     with open(sample_ids_file, 'w', newline='') as myfile:
-        myfile.write("\n".join([str(id) for id in samples_ids]))
-    return samples_ids
+        myfile.write("\n".join([str(id) for id in sample_ids]))
+    return sample_ids
 
 def compute_statistics(args, data_split, al_scores, accuracy_scores, step_num=None):
     all_ids = al_scores.keys()

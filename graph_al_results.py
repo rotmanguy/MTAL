@@ -29,16 +29,17 @@ domains = ['bc', 'bn', 'mz', 'nw', 'tc', 'wb']
 pretrained_model = 'bert-base-cased_unfreeze'
 tasks_list = [("deps",), ("ner", ), ("deps", "ner")]
 task_for_scoring = ['ner', 'deps']
+task_to_name = {'ner': 'ner', 'deps': 'dp'}
 graph_types = ["Num_Tokens", "Num_Sentences"]
 graph_type_to_label = {"Num_Tokens": 'Number of Tokens', "Num_Sentences": 'Number of Sentences'}
 all_models = []
 for tasks in tasks_list:
     if len(tasks) > 1:
         #al_scoring_list = ['random', 'entropy', 'dropout_agreement', 'joint_entropy', 'dropout_joint_agreement']
-        al_scoring_list = ['random', 'entropy', 'joint_entropy']
+        al_scoring_list = ['random', 'entropy', 'joint_entropy', 'joint_min_entropy']
     else:
         #al_scoring_list = ['random', 'entropy', 'dropout_agreement']
-        al_scoring_list = ['random', 'entropy']
+        al_scoring_list = ['random', 'entropy', 'dropout_agreement']
     for al_scoring in al_scoring_list:
         if (al_scoring == 'entropy' or al_scoring == 'dropout_agreement') and len(tasks) > 1:
             task_for_scoring_list = tasks
@@ -52,13 +53,16 @@ for tasks in tasks_list:
 
 model_to_label = {
     'deps_al_scoring_random': 'ST-R',
-    'deps_al_scoring_entropy': 'ST-CE',
+    'deps_al_scoring_entropy': 'ST-EC-DP',
+    'deps_al_scoring_dropout_agreement': 'ST-DA-DP',
     'ner_al_scoring_random': 'ST-R',
-    'ner_al_scoring_entropy': 'ST-CE',
+    'ner_al_scoring_entropy': 'ST-EC-NER',
+    'ner_al_scoring_dropout_agreement': 'ST-DA-NER',
     'deps_ner_al_scoring_random': 'MT-R',
-    'deps_ner_al_scoring_joint_entropy': 'MT-JCE',
-    'deps_ner_al_scoring_entropy_by_deps': 'MT-CE-DP',
-    'deps_ner_al_scoring_entropy_by_ner': 'MT-CE-NER'
+    'deps_ner_al_scoring_joint_entropy': 'MT-JEC',
+    'deps_ner_al_scoring_entropy_by_deps': 'MT-EC-DP',
+    'deps_ner_al_scoring_entropy_by_ner': 'MT-EC-NER',
+    'deps_ner_al_scoring_joint_min_entropy': 'MT-JMIN'
 }
 
 num_iters = 5
@@ -71,6 +75,14 @@ for graph_type in graph_types:
             domain_dict[task] = OrderedDict()
             for model in all_models:
                 if task not in model:
+                    continue
+                if model == 'deps_ner_al_scoring_entropy_by_ner' and task == 'deps':
+                    continue
+                if model == 'deps_ner_al_scoring_entropy_by_deps' and task == 'ner':
+                    continue
+                if model == 'deps_ner_al_scoring_joint_min_entropy' and task == 'deps':
+                    continue
+                if model == 'deps_ner_al_scoring_joint_entropy' and task == 'ner':
                     continue
                 if label_smoothing:
                     model_name = dataset + '_' + domain + '_active_learning_train_percentage_' +\
@@ -115,7 +127,7 @@ for graph_type in graph_types:
 
     for domain in domains:
         for task in ['deps', 'ner']:
-            plt.figure(num=None, figsize=(9, 9), dpi=300, facecolor='w', edgecolor='k')
+            plt.figure(num=None, figsize=(7, 7), dpi=300, facecolor='w', edgecolor='k')
             print(domain + '_' + task)
             markers = ['D', 'o', 'x', '^', '+', 'H', 'p', '.', '1', '2']
             m_idx = 0
@@ -125,14 +137,15 @@ for graph_type in graph_types:
                 color = 'C' + str(c_idx)
                 m_idx += 1
                 c_idx += 1
-                plt.plot(model_dict[0], model_dict[1], c=color, marker=marker, label=model_to_label[model])
+                plt.plot(model_dict[0], model_dict[1], c=color, marker=marker, label=model_to_label[model],
+                         linewidth=3.0)
             plt.xlabel(graph_type_to_label[graph_type], fontsize=20, fontweight='bold')
             if task == 'deps':
                 plt.ylabel("LAS", fontsize=18, fontweight='bold')
             else:
                 plt.ylabel("F1", fontsize=18, fontweight='bold')
-            plt.legend(loc="lower right")
-            plt.title(domain.upper() + ' - ' + task.upper(), fontsize=20, fontweight='bold')
+            plt.legend(loc="lower right", prop={'size': 17})
+            plt.title(domain.upper() + ' - ' + task_to_name[task].upper(), fontsize=20, fontweight='bold')
             plt.show()
             plt.savefig(os.path.join(plots_dir, graph_type + '_' + domain + '_' + task + '.png'))
             plt.close()
