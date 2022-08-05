@@ -1,2 +1,2 @@
 Official code for the paper "Multi-task Active Learning for Pre-trained Transformer-based Models". Please cite our paper in case you are using this code.
-The code preparation is still in progress and will be available soon.
+The preparation of the code is still in progress and the code will be available soon.
