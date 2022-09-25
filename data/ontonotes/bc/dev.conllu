@@ -1,0 +1,27 @@
+1	first	_	RB	_	_	2	com	_	_	B-ORDINAL
+2	up	_	RB	_	_	8	adv	_	_	O
+3	on	_	IN	_	_	5	case	_	_	O
+4	the	_	DT	_	_	5	det	_	_	O
+5	docket	_	NN	_	_	2	ppmod	_	_	O
+6	tonight	_	NN	_	_	2	advnp	_	_	B-TIME
+7	we	_	PRP	_	_	8	nsbj	_	_	O
+8	got	_	VBP	_	_	0	root	_	_	O
+9	an	_	DT	_	_	10	det	_	_	O
+10	interview	_	NN	_	_	8	obj	_	_	O
+11	with	_	IN	_	_	13	case	_	_	O
+12	the	_	DT	_	_	13	det	_	_	O
+13	witness	_	NN	_	_	10	ppmod	_	_	O
+14	who	_	WP	_	_	15	r-nsbj	_	_	O
+15	led	_	VBD	_	_	13	relcl	_	_	O
+16	investigators	_	NNS	_	_	15	obj	_	_	O
+17	to	_	IN	_	_	19	case	_	_	O
+18	a	_	DT	_	_	19	det	_	_	O
+19	landfill	_	NN	_	_	15	ppmod	_	_	O
+20	in	_	IN	_	_	22	case	_	_	O
+21	the	_	DT	_	_	22	det	_	_	O
+22	search	_	NN	_	_	15	ppmod	_	_	O
+23	for	_	IN	_	_	25	case	_	_	O
+24	Natalee	_	NNP	_	_	25	com	_	_	B-PERSON
+25	Holloway	_	NNP	_	_	22	ppmod	_	_	I-PERSON
+26	.	_	.	_	_	8	p	_	_	O
+

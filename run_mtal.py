@@ -5,6 +5,7 @@ import logging
 import os
 from torch import cuda, device, distributed
 from torch.utils.data import DataLoader
+
 from utils.training import set_seed, train
 
 from io_.dataset_readers.convert_allenlp_reader_to_pytorch_dataset import AllennlpDataset
@@ -53,10 +54,8 @@ def main():
     parser.add_argument("--saved_config_path", default=None, type=str,
                         help="path for pretrained config name")
     parser.add_argument("--load_pretrained_model", default=None, type=str, help="path for pretrained model")
-    parser.add_argument("--vocab_path", default="data/ud/vocab/multilingual/vocabulary", type=str,
+    parser.add_argument("--vocab_path", default=None, type=str,
                         help="The vocabulary path")
-    parser.add_argument("--bert_vocab_path", default= "config/archive/bert-base-multilingual-cased/vocab.txt", type=str,
-                        help="The bert vocabulary path")
     parser.add_argument("--tokenizer_name", default="", type=str,
                         help="Pretrained tokenizer name or path if not the same as model_name")
     parser.add_argument("--cache_dir", default="", type=str,
@@ -232,6 +231,8 @@ def main():
         cache_vocab(args, data_paths)
     except:
         logger.warning("Could not cache vocab")
+    if args.vocab_path is None:
+        args.vocab_path = os.path.join(args.data_dir, args.dataset, args.src_domain, 'vocabulary')
     vocab = Vocabulary.from_files(args.vocab_path)
     logger.info("Vocab path: %s\n" % args.vocab_path)
 

@@ -22,7 +22,6 @@ def cache_vocab(args, data_paths):
     """
 
     params = {"vocabulary": {
-        "directory_path": args.vocab_path,
         "non_padded_namespaces": ["upos", "xpos", "feats", "lemmas", "ner", "*tags", "*labels"],
         "tokens_to_add": {
             "upos": ["@@UNKNOWN@@"],
@@ -45,23 +44,28 @@ def cache_vocab(args, data_paths):
     params.update(dataset_reader_params)
     params = Params(params)
 
-    if "vocabulary" not in params or "directory_path" not in params["vocabulary"]:
-        return
+    if args.vocab_path is not None:
+        params["directory_path"] = args.vocab_path
 
-    vocab_path = params["vocabulary"]["directory_path"]
+        vocab_path = params["vocabulary"]["directory_path"]
 
-    if os.path.exists(vocab_path):
-        if os.listdir(vocab_path):
-            return
+        if os.path.exists(vocab_path):
+            if os.listdir(vocab_path):
+                return
 
-        # Remove empty vocabulary directory to make AllenNLP happy
-        try:
-            os.rmdir(vocab_path)
-        except OSError:
-            pass
+            # Remove empty vocabulary directory to make AllenNLP happy
+            try:
+                os.rmdir(vocab_path)
+            except OSError:
+                pass
 
-    params["vocabulary"].pop("directory_path", None)
-    make_vocab_from_params(params, os.path.split(vocab_path)[0])
+        params["vocabulary"].pop("directory_path", None)
+        output_dir = os.path.split(vocab_path)[0]
+    else:
+        output_dir = os.path.join(args.data_dir, args.dataset, args.src_domain)
+        args.vocab_path = os.path.join(output_dir, 'vocabulary')
+
+    make_vocab_from_params(params, output_dir)
 
 def clean_batch(args, batch, mode='train'):
     """
