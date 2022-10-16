@@ -3,7 +3,7 @@ import numpy as np
 from active_learning.blp_selection_utils import mip_single_task_selection, mip_unrestricted_disjoint_sets, \
     mip_equal_budget_disjoint_sets, mip_joint_task_selection, mip_single_task_confidence_selection
 
-# Set task names and task length
+# Set the task names and length
 tasks = ['deps', 'ner']
 num_tasks = len(tasks)
 
