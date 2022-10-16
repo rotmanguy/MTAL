@@ -166,7 +166,7 @@ def main():
         ptvsd.enable_attach(address=(args.server_ip, args.server_port), redirect_output=True)
         ptvsd.wait_for_attach()
 
-    # Verify arguments
+    # Checking validity of arguments
     if args.task_levels is not None:
         assert len(args.tasks) == len(args.task_levels)
         assert all([isinstance(level, int) for level in args.task_levels])
@@ -178,6 +178,7 @@ def main():
         if sum(args.task_weights_for_loss) != 1:
             args.task_weights_for_loss = [weight / sum(args.task_weights_for_loss)
                                           for weight in args.task_weights_for_loss]
+
     if args.task_weights_for_selection is not None:
         assert len(args.tasks) == len(args.task_weights_for_selection)
         assert all([weight >= 0 for weight in args.task_weights_for_selection])
@@ -185,6 +186,22 @@ def main():
         if sum(args.task_weights_for_selection) != 1:
             args.task_weights_for_selection = [weight / sum(args.task_weights_for_selection)
                                                for weight in args.task_weights_for_selection]
+
+    # If we train a single-task model we should config task_for_scoring accordingly
+    if len(args.tasks) == 1 and args.task_for_scoring is None:
+        args.task_for_scoring = args.tasks[0]
+
+    # Checking validity of arguments for non-aggregated multi-task confidence scores
+    if len(args.tasks) > 1 and \
+            args.al_selection_method in ['entropy_based_confidence', 'dropout_agreement'] and \
+            args.task_for_scoring is None:
+        raise ValueError('task_for_scoring should be set in multi-task mode when using '
+                         '"entropy_based_confidence" or "dropout_agreement" as the selection method.')
+
+    # Checking validity of arguments for "from_file" confidence score
+    if args.al_selecion_method == 'from_file' and args.load_sample_ids_dir is None:
+        raise ValueError('load_sample_ids_dir should be set when using '
+                         '"from_file" as the selection method.')
 
     # Setup CUDA, GPU & distributed training
     if args.device == -1:
@@ -202,22 +219,6 @@ def main():
     # Set number of GPUs and devices
     args.n_gpu = n_gpu
     args.device = device_
-
-    # If we train a single-task model we should config task_for_scoring accordingly
-    if len(args.tasks) == 1 and args.task_for_scoring is None:
-        args.task_for_scoring = args.tasks[0]
-
-    # Checking validity of arguments for non-aggregated multi-task confidence scores
-    if len(args.tasks) > 1 and \
-            args.al_selection_method in ['entropy_based_confidence', 'dropout_agreement'] and \
-            args.task_for_scoring is None:
-        raise ValueError('task_for_scoring should be set in multi-task mode when using '
-                         '"entropy_based_confidence" or "dropout_agreement" as the selection method.')
-
-    # Checking validity of arguments for "from_file" confidence score
-    if args.al_selecion_method == 'from_file' and args.load_sample_ids_dir is None:
-        raise ValueError('load_sample_ids_dir should be set when using '
-                         '"from_file" as the selection method.')
 
     # Setup logging
     logging.basicConfig(filename=os.path.join(args.output_dir, args.src_domain + '_log.txt'),
