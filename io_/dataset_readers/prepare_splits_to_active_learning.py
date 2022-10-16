@@ -15,6 +15,9 @@ def prepare_splits(datasets: Dict[str, Dataset],
         training_set_size = int(np.floor(len(train_samples_list) * training_set_percentage))
     elif training_set_size is None:
         raise ValueError('train_percentage and train_size must not contain both None')
+    if training_set_size <= 0:
+        raise ValueError('training_set_size is 0. Please try to add more training samples to train.conllu '
+                         'or reduce either the training_set_size or the training_set_percentage arguments.')
     train_samples = train_samples_list[:training_set_size]
     datasets['train'] = AllennlpDataset(datasets['train'].vocab, train_samples)
     # Preparing unlabeled samples (those that we did not choose for training)

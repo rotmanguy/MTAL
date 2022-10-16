@@ -4,7 +4,8 @@ import os
 import torch
 from tqdm import tqdm
 
-from active_learning.al_selection_utils import select_by_pareto, select_by_rrf, select_by_independent_selection
+from active_learning.al_selection_utils import enable_dropout, select_by_independent_selection, select_by_pareto, select_by_rrf
+
 from active_learning.al_utils import compute_accuracy, compute_statistics, save_confidence_per_task, save_sample_ids
 from active_learning.entropy_utils import compute_sequence_label_entropy, compute_dependency_entropy
 from io_.io_utils import clean_batch
@@ -94,12 +95,6 @@ def entropy_based_confidence(args, model, dataloader, task, al_iter_num):
     save_confidence_per_task(args, 'unlabeled', al_scores, al_iter_num)
 
     return sample_ids
-
-def enable_dropout(model):
-    # Enabling dropout
-    for m in model.modules():
-        if m.__class__.__name__.startswith('Dropout'):
-            m.train()
 
 def dropout_agreement(args, model, dataloader, task, al_iter_num, k=10):
     logger.info("***** Scoring Unlabeled Samples *****")
@@ -632,6 +627,12 @@ def independent_selection_entropy_based_confidence(args, model, dataloader, al_i
     return sample_ids
 
 def load_from_file(args, al_iter_num):
+    """
+    Loading sample ids from a pre-saved file (please specify the directory of the file: 'args.load_sample_ids_dir')
+    """
+
+    assert args.load_sample_ids_dir is not None
+
     # Load file
     sample_ids_file = [os.path.join(args.load_sample_ids_dir, f) for f in os.listdir(args.load_sample_ids_dir) if
                         args.src_domain + '_sample_ids' in f and 'iter_' + str(al_iter_num) in f][0]

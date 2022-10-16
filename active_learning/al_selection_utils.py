@@ -2,6 +2,11 @@ from copy import deepcopy
 
 import numpy as np
 
+def enable_dropout(model):
+    # Enabling dropout
+    for m in model.modules():
+        if m.__class__.__name__.startswith('Dropout'):
+            m.train()
 
 def find_pareto_efficient(costs, task_weights_for_selection=None, return_mask = False):
     """

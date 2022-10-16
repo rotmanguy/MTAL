@@ -1,22 +1,34 @@
+from collections.abc import Iterable
 from typing import Union, Dict, List
 
 import numpy as np
-from mip import Model, BINARY, minimize, xsum
+from mip import Model, BINARY, maximize, xsum
 
-def mip_single_task(sample_to_confidences: Dict[int, np.array],
-                    sample_to_costs: Dict[int, np.array],
-                    total_cost: Union[int, float],
-                    tasks: List[str]) -> List[int]:
+# Todo: In the current implementation the joint costs take place
+#  only when a sample is annotated on all tasks, but there could be a setup
+#  where there are more than two tasks and we would like to formulate joint
+#  costs for the case where samples are selected to be annotated on only a
+#  subset of the tasks.
+
+def mip_single_task_selection(sample_to_confidences: Dict[int, np.array],
+                              sample_to_costs: Dict[int, np.array],
+                              total_cost: Union[int, float],
+                              tasks: List[str]) -> List[int]:
     """
     Computing BLP optimization for single-task selection:
-    A sample can be annotated for the task or not.
+    A sample can be annotated on the task or not.
+
+    The BLP optimization maximizes the single-task uncertainties (1 - confidence)
+    of the selected samples given the budget constraints.
+    Please make sure to normalize the confidence scores such that they are in the range
+    of 0 to 1.
 
     :param sample_to_confidences: a mapping from sample to its confidence scores
     (should be an np.array with a single cell).
     :param sample_to_costs: a mapping from sample to its cost functions
     (should be an np.array with a single cell).
     :param total_cost: the total budget cost.
-    :param tasks: a list of the trained tasks.
+    :param tasks: a list of the trained tasks (should contain a single task).
     :return: a list of the selected sample indices.
     """
 
@@ -29,17 +41,19 @@ def mip_single_task(sample_to_confidences: Dict[int, np.array],
     num_sample_ids = len(all_sample_ids)
 
     # Prepare confidence scores
-    confidence_scores = [confidence[0] for _, confidence in sample_to_confidences.items()]
+    confidence_scores = [confidence[0] if isinstance(confidence, Iterable) else confidence
+                         for _, confidence in sample_to_confidences.items()]
 
     # Prepare costs
-    costs = [cost[0] for _, cost in sample_to_costs.items()]
+    costs = [cost[0] if isinstance(cost, Iterable) else cost
+             for _, cost in sample_to_costs.items()]
 
     # Build BLP model
     m = Model("knapsack_single_task")
     # Add variables
     x = [m.add_var(var_type=BINARY) for _ in range(num_sample_ids)]
     # Add objective function
-    m.objective = minimize(xsum(confidence_scores[j] * x[j] for j in range(num_sample_ids)))
+    m.objective = maximize(xsum((1- confidence_scores[j]) * x[j] for j in range(num_sample_ids)))
     # Add budget constraints
     m += (xsum(costs[j] * x[j] for j in range(num_sample_ids)) <= total_cost)
     # Solve BLP model
@@ -56,6 +70,11 @@ def mip_unrestricted_disjoint_sets(sample_to_confidences: Dict[int, np.array],
     """
     Computing BLP optimization for unrestricted disjoint sets:
     A sample can be annotated on none/one/all of the tasks.
+
+    The BLP optimization maximizes the single-task uncertainties (1 - confidence)
+    of the selected samples given the budget constraints.
+    Please make sure to normalize the confidence scores such that they are in the range
+    of 0 to 1.
 
     :param sample_to_confidences: a mapping from sample to its confidence scores
     (sorted by the task order).
@@ -90,7 +109,7 @@ def mip_unrestricted_disjoint_sets(sample_to_confidences: Dict[int, np.array],
     # Add dummy variables indicating that a sample will be annotated on all tasks
     y = [m.add_var(var_type=BINARY) for _ in range(num_sample_ids)]
     # Add objective function
-    m.objective = minimize(xsum(confidence_scores[i][j] * x[i][j]
+    m.objective = maximize(xsum((1 - confidence_scores[i][j]) * x[i][j]
                                 for j in range(num_sample_ids)
                                 for i in range(num_tasks)))
     # Add budget constraints
@@ -123,11 +142,17 @@ def mip_equal_budget_disjoint_sets(sample_to_confidences: Dict[int, np.array],
     We split the budget equally between all tasks and solve a BLP optimization problem
     for each task separately given its confidence scores and costs.
     A sample can be annotated on none/one/all of the tasks.
-    # Since the following algorithm is iterative, for relaxation purposes,
-    # if a sample was selected for annotation for any of the tasks
-    # (could be more than one) in the current iteration,
-    # it will be removed from the pool of unlabeled samples
-    # and will not be allowed to be selected for the other tasks in next iterations.
+
+    Since the following algorithm is iterative, for relaxation purposes,
+    if a sample was selected for annotation for any of the tasks
+    (could be more than one) in the current iteration,
+    it will be removed from the pool of unlabeled samples
+    and will not be allowed to be selected for the other tasks in next iterations.
+
+    The BLP optimization maximizes the single-task uncertainties (1 - confidence)
+    of the selected samples given the budget constraints.
+    Please make sure to normalize the confidence scores such that they are in the range
+    of 0 to 1.
 
     :param sample_to_confidences: a mapping from sample to its confidence scores
     (sorted by the task order).
@@ -154,7 +179,7 @@ def mip_equal_budget_disjoint_sets(sample_to_confidences: Dict[int, np.array],
     total_cost_left = total_cost
 
     # Iterate until reach total budget
-    while cur_total_used_cost > 0:
+    while total_cost_left > 0 and cur_total_used_cost > 0:
         # Prepare current sample ids (those that have not been selected thus far)
         cur_all_sample_ids = [j for j, _ in sample_to_confidences.items()
                                    if j not in sample_ids_union]
@@ -172,8 +197,13 @@ def mip_equal_budget_disjoint_sets(sample_to_confidences: Dict[int, np.array],
         cur_costs = [[cost[i] for j, cost in sample_to_costs.items()
                       if j not in sample_ids_union]
                      for i in range(num_tasks)]
-        cur_joint_costs = [cost[-1] for j, cost in sample_to_costs.items()
-                           if j not in sample_ids_union]
+
+        # Prepare current mappings from samples to costs
+        cur_sample_to_costs = [{j: cost[i] for j, cost in sample_to_costs.items()
+                                if j not in sample_ids_union}
+                               for i in range(num_tasks)]
+        cur_sample_to_joint_costs = {j: cost[-1] for j, cost in sample_to_costs.items()
+                                     if j not in sample_ids_union}
 
         for i in range(num_tasks):
             # Build model
@@ -181,32 +211,36 @@ def mip_equal_budget_disjoint_sets(sample_to_confidences: Dict[int, np.array],
             # Add variables
             x = [m.add_var(var_type=BINARY) for _ in range(cur_num_sample_ids)]
             # Add objective function
-            m.objective = minimize(xsum(cur_confidence_scores[i][j] * x[i][j] for j in range(cur_num_sample_ids)))
+            m.objective = maximize(xsum((1 - cur_confidence_scores[i][j]) * x[j] for j in range(cur_num_sample_ids)))
             # Add budget constraints
-            m += (xsum(cur_costs[i][j] * x[i][j] for j in range(cur_num_sample_ids)) <= (total_cost_left / num_tasks))
+            m += (xsum(cur_costs[i][j] * x[j] for j in range(cur_num_sample_ids)) <= (total_cost_left / num_tasks))
             # Solve model
             m.optimize(max_seconds=500)
 
             # Update sample ids that were selected for task i
             for j in range(cur_num_sample_ids):
-                if x[i][j].x >= 0.99:
+                if x[j].x >= 0.99:
                     cur_sample_ids[i].add(cur_all_sample_ids[j])
-                    sample_ids[i].update(cur_sample_ids)
+            sample_ids[i].update(cur_sample_ids[i])
 
         # Update the union of all selected sample ids
         cur_union_sample_ids = set.union(*cur_sample_ids)
         sample_ids_union.update(cur_union_sample_ids)
 
         # Calculate current total cost that was used in the current iteration
-        cur_inter_sample_ids = set.intersection(*sample_ids)
+        cur_inter_sample_ids = set.intersection(*cur_sample_ids)
         cur_total_used_cost = 0
-        for j in range(cur_num_sample_ids):
-            if j in cur_inter_sample_ids:
-                cur_total_used_cost += cur_joint_costs[j]
-            else:
-                for i in range(num_tasks):
-                    if j in cur_sample_ids[i]:
-                        cur_total_used_cost += cur_costs[j]
+
+        # we add the single-task cost for samples that were not selected to be annotated on all tasks
+        for i in range(num_tasks):
+            cur_sample_ids_set = \
+                cur_sample_ids[i].difference(*[set_ for k, set_ in enumerate(cur_sample_ids) if k != i])
+            for j in cur_sample_ids_set:
+                cur_total_used_cost += cur_sample_to_costs[i][j]
+
+        # we add the joint cost for samples that were selected to be annotated on all tasks
+        for j in cur_inter_sample_ids:
+            cur_total_used_cost += cur_sample_to_joint_costs[j]
 
         # Update total costs
         total_used_cost += cur_total_used_cost
@@ -223,6 +257,12 @@ def mip_joint_task_selection(sample_to_confidences: Dict[int, np.array],
     """
     Computing BLP optimization for joint task selection:
     A sample can be annotated on none/all of the tasks.
+    Since we would like to annotate samples on all tasks, we use the joint costs.
+
+    The BLP optimization maximizes the multi-task uncertainties (1 - confidence)
+    of the selected samples given the budget constraints.
+    Please make sure to normalize the confidence scores such that they are in the range
+    of 0 to 1.
 
     :param sample_to_confidences: a mapping from sample to its confidence scores
     (sorted by the task order). Additionally, please make sure to place the joint confidence score
@@ -255,7 +295,7 @@ def mip_joint_task_selection(sample_to_confidences: Dict[int, np.array],
     # Add variables
     x = [m.add_var(var_type=BINARY) for _ in range(num_sample_ids)]
     # Add objective function
-    m.objective = minimize(xsum(confidence_scores[j] * x[j] for j in range(num_sample_ids)))
+    m.objective = maximize(xsum((1 - confidence_scores[j]) * x[j] for j in range(num_sample_ids)))
     # Add budget constraints
     m += (xsum(joint_costs[j] * x[j] for j in range(num_sample_ids)) <= total_cost)
     # Solve model
@@ -274,8 +314,13 @@ def mip_single_task_confidence_selection(sample_to_confidences: Dict[int, np.arr
     """
     Computing BLP optimization for single task confidence selection:
     A sample can be annotated on none/all of the tasks.
-    We use the confidence scores of task_for_scoring.
+    We only use the confidence scores of task_for_scoring for the objective function.
     Since we would like to annotate samples on all tasks, we use the joint costs.
+
+    The BLP optimization maximizes the single-task uncertainties (1 - confidence)
+    of the selected samples given the budget constraints.
+    Please make sure to normalize the confidence scores such that they are in the range
+    of 0 to 1.
 
     :param sample_to_confidences: a mapping from sample to its confidence scores
     (sorted by the task order).
@@ -315,7 +360,7 @@ def mip_single_task_confidence_selection(sample_to_confidences: Dict[int, np.arr
     # Add variables
     x = [m.add_var(var_type=BINARY) for _ in range(num_sample_ids)]
     # Add objective function
-    m.objective = minimize(xsum(confidence_scores[j] * x[j] for j in range(num_sample_ids)))
+    m.objective = maximize(xsum((1 - confidence_scores[j]) * x[j] for j in range(num_sample_ids)))
     # Add budget constraints
     m += (xsum(joint_costs[j] * x[j] for j in range(num_sample_ids)) <= total_cost)
     # Solve model

@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from utils.training import set_seed, train
 
 from io_.dataset_readers.convert_allenlp_reader_to_pytorch_dataset import AllennlpDataset
-from io_.dataset_readers.universal_dependencies import UniversalDependenciesDatasetReader # To register "universal-dependencies-reader"
+from io_.dataset_readers.universal_dependencies import UniversalDependenciesDatasetReader # Do not remove: This is for registering "universal-dependencies-reader"
 from io_.dataset_readers.load_dataset_reader import load_dataset_reader_
 from io_.dataset_readers.prepare_splits_to_active_learning import prepare_splits, add_samples
 from io_.io_utils import cache_vocab
@@ -28,7 +28,23 @@ def main():
                         help="The output directory where the model predictions and checkpoints will be written.")
 
     # AL parameters
-    parser.add_argument("--al_selection_method", default='entropy_based_confidence', type=str, help="active learning selection method")
+    parser.add_argument("--al_selection_method", default='entropy_based_confidence', type=str,
+                        choices=['random',
+                                 'entropy_based_confidence',
+                                 'dropout_agreement',
+                                 'average_entropy_based_confidence',
+                                 'average_dropout_agreement',
+                                 'maximum_entropy_based_confidence',
+                                 'minimum_entropy_based_confidence',
+                                 'pareto_entropy_based_confidence',
+                                 'rrf_entropy_based_confidence',
+                                 'independent_selection_entropy_based_confidence',
+                                 'from_file'],
+                        help="active learning selection method")
+    parser.add_argument("--task_for_scoring", type=str, default=None,
+                        help="tasks to be judged by in the al method (only applicable for entropy_based_confidence and dropout_agreement)")
+    parser.add_argument("--load_sample_ids_dir", default=None, type=str,
+                        help="loading sample ids files from directory. Only valid if al_selection_method is 'from_file'.")
     parser.add_argument("--num_al_iterations", type=int, default=5,
                         help="Number of iterations for al process.")
     ## please set training_set_size or training_set_percentage, but not both.
@@ -39,16 +55,12 @@ def main():
     parser.add_argument("--load_checkpoint_from_last_iter", default=False,
                         action="store_true", help="loading checkpoint from last AL iteration")
     parser.add_argument("--tasks", default=['deps', 'ner'], type=str, nargs="+", help="Tasks to solve")
-    parser.add_argument("--task_for_scoring", type=str, default=None,
-                        help="tasks to be judged by in the al method (only applicable for entropy_based_confidence and dropout_agreement)")
     parser.add_argument("--task_levels", default=None, type=int, nargs="+",
                         help="output layer of each task. Make sure to insert task levels in the same order of the tasks.")
     parser.add_argument("--task_weights_for_loss", default=None, type=float, nargs="+",
                         help="tasks weights for loss function. Make sure to insert task weights in the same order of the tasks.")
     parser.add_argument("--task_weights_for_selection", default=None, type=float, nargs="+",
                         help="task weights for AL selection (appeared as beta in the original paper). Make sure to insert task weights in the same order of the tasks.")
-    parser.add_argument("--load_sample_ids_dir", default=None, type=str,
-                        help="loading sample ids files from directory. Only valid if al_selection_method is from_file.")
 
     ## Training and Data parameters
     parser.add_argument("--saved_config_path", default=None, type=str,
@@ -74,7 +86,7 @@ def main():
     # Model parameters
     parser.add_argument("--pretrained_model", type=str, default="bert-base-multilingual-cased",
                         help="pretrained model")
-    parser.add_argument("--multitask_model_type", type=str, default="complex", choices=['simple', 'complex'],
+    parser.add_argument("--multitask_model_type", type=str, default="simple", choices=['simple', 'complex'],
                         help="choose multitask model type: simple or complex (with shared and unshared modules)")
     parser.add_argument("--mix_embedding", default=False, action="store_true",
                         help="if True perform weighted average over bert layers")
@@ -179,25 +191,33 @@ def main():
         args.no_cuda = True
     if args.local_rank == -1 or args.no_cuda:
         device_ = device("cuda" if cuda.is_available() and not args.no_cuda else "cpu")
+        n_gpu = cuda.device_count() if not args.no_cuda else 0
     # Initializes the distributed backend which will take care of synchronizing nodes/GPUs
     else:
         cuda.set_device(args.local_rank)
         device_ = device("cuda", args.local_rank)
+        n_gpu = 1
         distributed.init_process_group(backend="nccl")
 
-    # Set number of GPUs and device
-    args.n_gpu = cuda.device_count() if not args.no_cuda else 0
+    # Set number of GPUs and devices
+    args.n_gpu = n_gpu
     args.device = device_
 
     # If we train a single-task model we should config task_for_scoring accordingly
     if len(args.tasks) == 1 and args.task_for_scoring is None:
         args.task_for_scoring = args.tasks[0]
 
+    # Checking validity of arguments for non-aggregated multi-task confidence scores
     if len(args.tasks) > 1 and \
             args.al_selection_method in ['entropy_based_confidence', 'dropout_agreement'] and \
             args.task_for_scoring is None:
-        raise ValueError('al_selection_method should be set in multi-task mode when using '
-                         '"entropy_based_confidence" or "dropout_agreement" as selection methods.')
+        raise ValueError('task_for_scoring should be set in multi-task mode when using '
+                         '"entropy_based_confidence" or "dropout_agreement" as the selection method.')
+
+    # Checking validity of arguments for "from_file" confidence score
+    if args.al_selecion_method == 'from_file' and args.load_sample_ids_dir is None:
+        raise ValueError('load_sample_ids_dir should be set when using '
+                         '"from_file" as the selection method.')
 
     # Setup logging
     logging.basicConfig(filename=os.path.join(args.output_dir, args.src_domain + '_log.txt'),
@@ -243,8 +263,10 @@ def main():
         datasets[data_split] = AllennlpDataset(vocab=vocab,
                                                reader=reader,
                                                dataset_path=data_paths[data_split])
-    # We simulate initial small training set
-    # by setting training_set_percentage or training_set_size
+    # We simulate an initial small training set
+    # by setting training_set_percentage or training_set_size.
+    # The rest of the training samples will be automatically moved to the unlabeled set
+    # and the development set size will be set to be x2 the size of the initial training set.
     orig_training_set_size = float(len(datasets['train']))
     if args.training_set_percentage is not None:
         datasets = prepare_splits(datasets=datasets, training_set_percentage=args.training_set_percentage)
@@ -258,7 +280,7 @@ def main():
     iterations = range(args.num_al_iterations - 1, args.num_al_iterations) \
         if args.do_eval else range(args.num_al_iterations)
 
-    # Running iterative AL
+    # Running an iterative AL
     for al_iter_num in iterations:
         dataloaders = {}
         for data_split in datasets.keys():
@@ -275,7 +297,7 @@ def main():
                                                   collate_fn=datasets[data_split].allennlp_collocate)
         # Run single training iteration
         sample_ids = train(args, dataloaders, vocab, al_iter_num)
-        # Prepare data for next AL iteration
+        # Prepare the training data for the next AL iteration
         if sample_ids:
             datasets = add_samples(datasets, sample_ids)
 

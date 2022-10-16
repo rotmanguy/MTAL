@@ -46,6 +46,7 @@ def train(args, dataloaders, vocab, al_iter_num=0):
     logger.info("Optimizer Info: \n%s" % optimizer)
     logger.info("Scheduler Info: \n%s" % scheduler)
 
+    tb_writer = None
     if args.local_rank in [-1, 0]:
         tb_writer = SummaryWriter()
 
@@ -62,6 +63,7 @@ def train(args, dataloaders, vocab, al_iter_num=0):
         logger.info("  Total optimization steps = %d", num_training_steps)
 
         patient = 0
+        step = 0
         tr_loss, logging_loss = 0.0, 0.0
         model.zero_grad()
         train_iterator = trange(int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in [-1, 0])
@@ -125,7 +127,7 @@ def train(args, dataloaders, vocab, al_iter_num=0):
         if os.path.exists(best_model_path):
             set_back_to_old_val = deepcopy(args.load_pretrained_model)
             args.load_pretrained_model = best_model_path
-            model = None # to free space
+            model = None # Freeing space
             model, optimizer, scheduler, amp, dev_eval_dict, global_step = build_model(args, vocab,
                                                                                        num_training_steps,
                                                                                        strict=True)
