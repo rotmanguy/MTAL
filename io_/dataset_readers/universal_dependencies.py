@@ -80,7 +80,7 @@ class UniversalDependenciesDatasetReader(DatasetReader):
                 upos_tags = get_field("upos")
                 xpos_tags = get_field("xpos")if "xpos" in self.tasks else None
                 feats = get_field("feats", lambda x: "|".join(k + "=" + v for k, v in x.items())
-                                                     if hasattr(x, "items") else "_")  if "feats" in self.tasks else None
+                if hasattr(x, "items") else "_")  if "feats" in self.tasks else None
                 heads = get_field("head")
                 dep_rels = get_field("deprel")
                 dependencies = list(zip(dep_rels, heads))

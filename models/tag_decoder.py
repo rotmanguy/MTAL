@@ -78,7 +78,6 @@ class TagDecoder(Model):
                  adaptive: bool = False,
                  output_dim: int = 768,
                  features: List[str] = None,
-                 scale_temperature: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(TagDecoder, self).__init__(vocab, regularizer)
@@ -89,10 +88,6 @@ class TagDecoder(Model):
         self.num_classes = self.vocab.get_vocab_size(task)
         self.adaptive = adaptive
         self.features = features if features else []
-
-        self.scale_temperature = scale_temperature
-        if self.scale_temperature:
-            self.temperature = torch.nn.Parameter(torch.ones(1) * 1.5)
 
         self.metrics = {
             "acc": CategoricalAccuracy(),
@@ -139,8 +134,6 @@ class TagDecoder(Model):
 
     def _adaptive_loss(self, hidden, mask, gold_tags, output_dim):
         logits = hidden
-        if self.scale_temperature:
-            logits = self.temperature_scale(logits)
         reshaped_log_probs = logits.view(-1, logits.size(2))
 
         preds = self.task_output.log_prob(reshaped_log_probs).view(output_dim)
@@ -159,11 +152,7 @@ class TagDecoder(Model):
 
     def _loss(self, hidden, mask, gold_tags, output_dim):
         logits = self.task_output(hidden)
-        if self.scale_temperature:
-            logits = self.temperature_scale(logits)
         preds = masked_softmax(logits, mask.unsqueeze(-1))
-        # reshaped_log_probs = logits.view(-1, self.num_classes)
-        # preds = F.softmax(reshaped_log_probs, dim=-1).view(output_dim)
 
         output_dict = {"logits": logits, "preds": preds}
 
@@ -183,8 +172,6 @@ class TagDecoder(Model):
 
         for feature in self.features:
             logits = self.feature_outputs[feature](hidden)
-            if self.scale_temperature:
-                logits = self.temperature_scale(logits)
             loss = sequence_cross_entropy_with_logits(logits,
                                                       gold_tags[feature],
                                                       mask,
@@ -242,11 +229,3 @@ class TagDecoder(Model):
         }
 
         return {**main_metrics, **features_metrics}
-
-    def temperature_scale(self, logits):
-        """
-        Perform temperature scaling on logits
-        """
-        # Expand temperature to match the size of logits
-        temperature = self.temperature.unsqueeze(1).expand(logits.size())
-        return logits / temperature

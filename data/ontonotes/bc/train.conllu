@@ -1,0 +1,16 @@
+1	Scholars	_	NNS	_	_	3	nsbj	_	_	O
+2	will	_	MD	_	_	3	modal	_	_	O
+3	give	_	VB	_	_	0	root	_	_	O
+4	you	_	PRP	_	_	3	dat	_	_	O
+5	a	_	DT	_	_	7	det	_	_	O
+6	detailed	_	JJ	_	_	7	attr	_	_	O
+7	analysis	_	NN	_	_	3	obj	_	_	O
+8	on	_	IN	_	_	10	case	_	_	O
+9	this	_	DT	_	_	10	det	_	_	O
+10	edition	_	NN	_	_	3	ppmod	_	_	O
+11	of	_	IN	_	_	14	case	_	_	O
+12	Hot	_	NNP	_	_	14	com	_	_	B-ORG
+13	Topic	_	NNP	_	_	14	com	_	_	I-ORG
+14	Analysis	_	NNP	_	_	10	ppmod	_	_	I-ORG
+15	.	_	.	_	_	3	p	_	_	O
+

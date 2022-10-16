@@ -126,12 +126,12 @@ UNIVERSAL_FEATURES = {
 class UDError(Exception):
     pass
 
-# Conversion methods handling `str` <-> `unicode` conversions in Python2
+# Conversion methods handling `str` <-> `unicode` conversions in Python3
 def _decode(text):
     return text if sys.version_info[0] >= 3 or not isinstance(text, str) else text.decode("utf-8")
 
 def _encode(text):
-    return text if sys.version_info[0] >= 3 or not isinstance(text, unicode) else text.encode("utf-8")
+    return text if sys.version_info[0] >= 3 or not isinstance(text, bytes) else text.encode("utf-8")
 
 # Load given CoNLL-U file into internal representation
 def load_conllu(file):
@@ -515,7 +515,7 @@ def write_results_file(evaluation, output_file):
                         ""
                     ))
 
-def print_results(evaluation):
+def log_results(evaluation):
     special_keys = {"ner": "NER"}
     logger.info("Metric     | Precision |    Recall |  F1 Score | AligndAcc  | Loss\n")
     logger.info("-----------+-----------+-----------+-----------+-----------")

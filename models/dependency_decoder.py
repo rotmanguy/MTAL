@@ -2,7 +2,7 @@
 Decodes dependency trees given a list of contextualized word embeddings
 """
 import sys
-from typing import Dict, Optional, Tuple, Any, List
+from typing import Dict, Optional, Tuple
 import logging
 import copy
 
@@ -13,7 +13,7 @@ import numpy
 
 from allennlp.common.checks import check_dimensions_match
 from allennlp.data import Vocabulary
-from allennlp.modules import Embedding, InputVariationalDropout, Seq2SeqEncoder
+from allennlp.modules import Embedding, InputVariationalDropout
 from allennlp.modules.matrix_attention.bilinear_matrix_attention import BilinearMatrixAttention
 from allennlp.modules import FeedForward
 from allennlp.models.model import Model
@@ -22,11 +22,8 @@ from allennlp.nn.util import get_range_vector, sequence_cross_entropy_with_logit
 from allennlp.nn.util import get_device_of, masked_softmax, get_lengths_from_binary_sequence_mask
 from allennlp.nn.chu_liu_edmonds import decode_mst
 from allennlp.training.metrics import AttachmentScores
-from torch.nn import MSELoss
 
 logger = logging.getLogger('mylog')
-
-POS_TO_IGNORE = {'``', "''", ':', ',', '.', 'PU', 'PUNCT', 'SYM'}
 
 class DependencyDecoder(Model):
     """
@@ -38,43 +35,22 @@ class DependencyDecoder(Model):
                  vocab: Vocabulary,
                  tag_representation_dim: int,
                  arc_representation_dim: int,
-                 pos_embed_dim: int = None,
-                 ner_embed_dim: int = None,
                  use_mst_decoding_for_validation: bool = True,
                  dropout: float = 0.0,
                  label_smoothing: float = 0.0,
-                 scale_temperature: bool = False,
                  initializer: InitializerApplicator = InitializerApplicator(),
                  regularizer: Optional[RegularizerApplicator] = None) -> None:
         super(DependencyDecoder, self).__init__(vocab, regularizer)
 
         encoder_output_dim = arc_representation_dim
 
-        self.pos_tag_embedding = None
-        if pos_embed_dim is not None:
-            self.pos_tag_embedding = Embedding(self.vocab.get_vocab_size("upos"), pos_embed_dim)
-
-        if pos_embed_dim is not None:
-            encoder_output_dim += pos_embed_dim
-
-        self.ner_tag_embedding = None
-        if ner_embed_dim is not None:
-            self.ner_tag_embedding = Embedding(self.vocab.get_vocab_size("ner"), ner_embed_dim)
-
-        if ner_embed_dim is not None:
-            encoder_output_dim += ner_embed_dim
-
-        self.scale_temperature = scale_temperature
-        if self.scale_temperature:
-            self.temperature = torch.nn.Parameter(torch.ones(1) * 1.5)
-
         self.dropout = torch.nn.Dropout(p=dropout)
 
         self.label_smoothing = label_smoothing
 
         self.head_arc_feedforward = FeedForward(encoder_output_dim, 1,
-                                                    arc_representation_dim,
-                                                    Activation.by_name("elu")())
+                                                arc_representation_dim,
+                                                Activation.by_name("elu")())
         self.child_arc_feedforward = copy.deepcopy(self.head_arc_feedforward)
 
         self.arc_attention = BilinearMatrixAttention(arc_representation_dim,
@@ -84,8 +60,8 @@ class DependencyDecoder(Model):
         num_labels = self.vocab.get_vocab_size("head_tags")
 
         self.head_tag_feedforward = FeedForward(encoder_output_dim, 1,
-                                                    tag_representation_dim,
-                                                    Activation.by_name("elu")())
+                                                tag_representation_dim,
+                                                Activation.by_name("elu")())
         self.child_tag_feedforward = copy.deepcopy(self.head_tag_feedforward)
 
         self.tag_bilinear = torch.nn.modules.Bilinear(tag_representation_dim,
@@ -102,12 +78,6 @@ class DependencyDecoder(Model):
 
         self.use_mst_decoding_for_validation = use_mst_decoding_for_validation
 
-        tags = self.vocab.get_token_to_index_vocabulary("pos")
-        punctuation_tag_indices = {tag: index for tag, index in tags.items() if tag in POS_TO_IGNORE}
-        self._pos_to_ignore = set(punctuation_tag_indices.values())
-        logger.info(f"Found POS tags corresponding to the following punctuation : {punctuation_tag_indices}. "
-                    "Ignoring words with these POS tags for evaluation.")
-
         self._attachment_scores = AttachmentScores()
         if initializer is not None:
             initializer(self)
@@ -115,32 +85,8 @@ class DependencyDecoder(Model):
     def forward(self,
                 encoded_text: torch.FloatTensor,
                 mask: torch.LongTensor,
-                pos_input: torch.LongTensor = None,
-                pos_type: str = None,  # 'logits' or 'tags'
-                ner_input: torch.LongTensor = None,
                 head_tags: torch.LongTensor = None,
                 head_indices: torch.LongTensor = None) -> Dict[str, torch.Tensor]:
-
-        batch_size, _, _ = encoded_text.size()
-
-        if pos_input is not None and self.pos_tag_embedding is not None:
-            # Embed the predicted POS tags and concatenate the embeddings to the input
-            if pos_type == 'logits':
-                num_pos_classes = pos_input.size(-1)
-                pos_input = pos_input.view(-1, num_pos_classes)
-                _, pos_input = pos_input.max(-1)
-
-            pos_embed_size = self.pos_tag_embedding.get_output_dim()
-            embedded_pos_tags = self.dropout(self.pos_tag_embedding(pos_input))
-            embedded_pos_tags = embedded_pos_tags.view(batch_size, -1, pos_embed_size)
-            encoded_text = torch.cat([encoded_text, embedded_pos_tags], -1)
-
-        if ner_input is not None and self.ner_tag_embedding is not None:
-            # Embed the predicted NER tags and concatenate the embeddings to the input
-            ner_embeddings = self.ner_tag_embedding(torch.arange(37, device=ner_input.device))
-            embedded_ner_tags = torch.matmul(ner_input, ner_embeddings)
-            embedded_ner_tags = self.dropout(embedded_ner_tags)
-            encoded_text = torch.cat([encoded_text, embedded_ner_tags], -1)
 
         batch_size, _, encoding_dim = encoded_text.size()
 
@@ -178,14 +124,14 @@ class DependencyDecoder(Model):
             energy = None
         else:
             (predicted_heads, predicted_head_tags), energy = self._mst_decode(head_tag_representation,
-                                                                    child_tag_representation,
-                                                                    attended_arcs,
-                                                                    mask)
+                                                                              child_tag_representation,
+                                                                              attended_arcs,
+                                                                              mask)
         predicted_heads = predicted_heads.to(encoded_text.device)
         predicted_head_tags = predicted_head_tags.to(encoded_text.device)
         # if head_indices is not None and head_tags is not None:
         if self.training:
-            head_logits, tag_logits, head_preds, tag_preds, arc_nll, tag_nll =\
+            head_logits, tag_logits, head_preds, tag_preds, arc_nll, tag_nll = \
                 self._construct_loss(head_tag_representation=head_tag_representation,
                                      child_tag_representation=child_tag_representation,
                                      attended_arcs=attended_arcs,
@@ -194,7 +140,6 @@ class DependencyDecoder(Model):
                                      mask=mask)
             loss = arc_nll + tag_nll
 
-            evaluation_mask = self._get_mask_for_eval(mask[:, 1:], pos_input)
             # We calculate attachment scores for the whole sentence
             # but excluding the symbolic ROOT token at the start,
             # which is why we start from the second element in the sequence.
@@ -202,7 +147,7 @@ class DependencyDecoder(Model):
                                     predicted_head_tags[:, 1:],
                                     head_indices[:, 1:],
                                     head_tags[:, 1:],
-                                    evaluation_mask)
+                                    mask[:, 1:])
         else:
             head_logits, tag_logits, head_preds, tag_preds, arc_nll, tag_nll = \
                 self._construct_loss(head_tag_representation=head_tag_representation,
@@ -290,30 +235,28 @@ class DependencyDecoder(Model):
         batch_size, sequence_length, _ = attended_arcs.size()
         # shape (batch_size, 1)
         range_vector = get_range_vector(batch_size, get_device_of(attended_arcs)).unsqueeze(1)
-        if self.scale_temperature:
-            attended_arcs = self.temperature_scale(attended_arcs)
+
         # shape (batch_size, sequence_length, sequence_length)
         normalised_arc_logits = self.masked_log_softmax(attended_arcs,
-                                                   mask) * float_mask.unsqueeze(2) * float_mask.unsqueeze(1)
+                                                        mask) * float_mask.unsqueeze(2) * float_mask.unsqueeze(1)
         # Mask the diagonal, because the head of a word can't be itself.
         attended_arcs = attended_arcs + torch.diag(attended_arcs.new(mask.size(1)).fill_(-sys.maxsize - 1))
         head_preds = masked_softmax(attended_arcs,  mask)
 
         # shape (batch_size, sequence_length, num_head_tags)
         head_tag_logits = self._get_head_tags(head_tag_representation, child_tag_representation, head_indices)
-        if self.scale_temperature:
-            head_tag_logits = self.temperature_scale(head_tag_logits)
+
         normalised_head_tag_logits = self.masked_log_softmax(head_tag_logits,
-                                                        mask.unsqueeze(-1)) * float_mask.unsqueeze(-1)
+                                                             mask.unsqueeze(-1)) * float_mask.unsqueeze(-1)
         tag_preds = masked_softmax(head_tag_logits, mask.unsqueeze(-1))
 
         if self.label_smoothing is not None and self.label_smoothing > 0.0:
             mask_copy = copy.deepcopy(mask)
             mask_copy[:, 0] = 0.0
             arc_nll = sequence_cross_entropy_with_logits(normalised_arc_logits,
-                                                            head_indices,
-                                                            mask_copy,
-                                                            label_smoothing=self.label_smoothing)
+                                                         head_indices,
+                                                         mask_copy,
+                                                         label_smoothing=self.label_smoothing)
             tag_nll = sequence_cross_entropy_with_logits(normalised_head_tag_logits,
                                                          head_tags,
                                                          mask_copy,
@@ -337,9 +280,6 @@ class DependencyDecoder(Model):
             arc_nll = -arc_loss.sum() / valid_positions.float()
             tag_nll = -tag_loss.sum() / valid_positions.float()
 
-        if not self.scale_temperature:
-            attended_arcs = None
-            head_tag_logits = None
         return attended_arcs, head_tag_logits, head_preds, tag_preds, arc_nll, tag_nll
 
     def _greedy_decode(self,
@@ -535,60 +475,25 @@ class DependencyDecoder(Model):
                                             child_tag_representation)
         return head_tag_logits
 
-    def _get_mask_for_eval(self,
-                           mask: torch.LongTensor,
-                           pos_input: torch.LongTensor) -> torch.LongTensor:
-        """
-        Dependency evaluation excludes words are punctuation.
-        Here, we create a new mask to exclude word indices which
-        have a "punctuation-like" part of speech tag.
-        Parameters
-        ----------
-        mask : ``torch.LongTensor``, required.
-            The original mask.
-        pos : ``torch.LongTensor``, required.
-            The pos tags for the sequence.
-        Returns
-        -------
-        A new mask, where any indices equal to labels
-        we should be ignoring are masked.
-        """
-        new_mask = mask.detach()
-        for label in self._pos_to_ignore:
-            label_mask = pos_input.eq(label).long()
-            new_mask = new_mask * (1 - label_mask)
-        return new_mask
-
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         return {f".run/deps/{metric_name}": metric
                 for metric_name, metric in self._attachment_scores.get_metric(reset).items()}
-
-    def temperature_scale(self, logits):
-        """
-        Perform temperature scaling on logits
-        """
-        # Expand temperature to match the size of logits
-        temperature = self.temperature.unsqueeze(1).expand(logits.size())
-        return logits / temperature
 
     def masked_log_softmax(self, vector: torch.Tensor, mask: torch.Tensor, dim: int = -1) -> torch.Tensor:
         """
         ``torch.nn.functional.log_softmax(vector)`` does not work if some elements of ``vector`` should be
         masked.  This performs a log_softmax on just the non-masked portions of ``vector``.  Passing
         ``None`` in for the mask is also acceptable; you'll just get a regular log_softmax.
-
         ``vector`` can have an arbitrary number of dimensions; the only requirement is that ``mask`` is
         broadcastable to ``vector's`` shape.  If ``mask`` has fewer dimensions than ``vector``, we will
         unsqueeze on dimension 1 until they match.  If you need a different unsqueezing of your mask,
         do it yourself before passing the mask into this function.
-
         In the case that the input vector is completely masked, the return value of this function is
         arbitrary, but not ``nan``.  You should be masking the result of whatever computation comes out
         of this in that case, anyway, so the specific values returned shouldn't matter.  Also, the way
         that we deal with this case relies on having single-precision floats; mixing half-precision
         floats with fully-masked vectors will likely give you ``nans``.
-
         If your logits are all extremely negative (i.e., the max value in your logit vector is -50 or
         lower), the way we handle masking here could mess you up.  But if you've got logit values that
         extreme, you've got bigger problems than this.
