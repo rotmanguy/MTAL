@@ -57,11 +57,12 @@ python blp_optimzation_example.py
 
 # Citation
 ```
-@article{rotman2021model,
-  title={Multi-task Active Learning for Pre-trained Transformer-based Models},
+@article{rotman2022multi,
+  title={Multi-task active learning for pre-trained transformer-based models},
   author={Rotman, Guy and Reichart, Roi},
   journal={Transactions of the Association for Computational Linguistics},
   volume={10},
+  pages={1209--1228},
   year={2022},
   publisher={MIT Press}
 }
